@@ -1,10 +1,17 @@
 package com.github.mikephil.charting.highlight;
 
+import com.github.mikephil.charting.charts.Chart;
 import com.github.mikephil.charting.components.YAxis;
+import com.github.mikephil.charting.data.BarData;
+import com.github.mikephil.charting.data.BarDataSet;
+import com.github.mikephil.charting.data.BarEntry;
 import com.github.mikephil.charting.data.BarLineScatterCandleBubbleData;
+import com.github.mikephil.charting.data.ChartData;
 import com.github.mikephil.charting.data.DataSet;
 import com.github.mikephil.charting.data.Entry;
+import com.github.mikephil.charting.data.LineData;
 import com.github.mikephil.charting.interfaces.dataprovider.BarLineScatterCandleBubbleDataProvider;
+import com.github.mikephil.charting.interfaces.dataprovider.CombinedDataProvider;
 import com.github.mikephil.charting.interfaces.datasets.IDataSet;
 import com.github.mikephil.charting.utils.MPPointD;
 
@@ -16,6 +23,16 @@ import java.util.List;
  */
 public class ChartHighlighter<T extends BarLineScatterCandleBubbleDataProvider> implements IHighlighter
 {
+    /**
+     This value is based on the Apple HMI recommandation : minimum 'interactive' target size of 44 x 44px, so a 22px radius circle around the tap point
+     */
+    private Float minimum_target_size = 44f;
+
+    /**
+     The minimum distance between a tap location and a trigger point
+     This value is based on the Apple HMI recommandation (minimum 'interactive' target size of 44 x 44px, so a 22px radius circle around the tap point)
+     */
+    private Float minimum_radius_size = 22f;
 
     /**
      * instance of the data-provider
@@ -204,8 +221,13 @@ public class ChartHighlighter<T extends BarLineScatterCandleBubbleDataProvider> 
     public Highlight getClosestHighlightByPixel(List<Highlight> closestValues, float x, float y,
                                                 YAxis.AxisDependency axis, float minSelectionDistance) {
 
+        boolean distanceIsFromLineChart = false;
         Highlight closest = null;
         float distance = minSelectionDistance;
+        ChartData highlighterChartData = null;
+
+        // We need to known the step width to constrain the closest selection distance check on "Bar" chart data
+        float stepWidth = mChart.getWidth()/mChart.getXRange();
 
         for (int i = 0; i < closestValues.size(); i++) {
 
@@ -213,12 +235,76 @@ public class ChartHighlighter<T extends BarLineScatterCandleBubbleDataProvider> 
 
             if (axis == null || high.getAxis() == axis) {
 
+                // 1. Compute the distance between the finger tap position and the chart origin coordinate
                 float cDistance = getDistance(x, y, high.getXPx(), high.getYPx());
 
-                if (cDistance < distance) {
-                    closest = high;
-                    distance = cDistance;
+                // 1bis. Some checks are based on the highlighter related chart data.
+                List<BarLineScatterCandleBubbleData> allData = ((CombinedDataProvider) mChart).getCombinedData().getAllData();
+                //check if list contains index of high value
+                if (high.getDataIndex() >=0 && high.getDataIndex() <= allData.size()-1) {
+                    highlighterChartData = allData.get(high.getDataIndex());
                 }
+
+
+                // 2. depending on the chart data, there's some additional tests to pass
+                if (highlighterChartData instanceof LineData) {
+                    /*
+                         We consider the chart line points have a clickable area around to.
+                         Thus, the clickable area is based on a circle, with a radius based on the Apple HMI recommandation (arbitrary choice)
+                         */
+
+                    // 2a. test whether it's the first distance to take into account, or if the finger tap location is not too far from the chart line
+                    // 2b. We replace the previous closest chart line distance only the previous one is from another chart type,
+                    //     or if it's a smaller value
+                    if (cDistance <= minimum_radius_size && cDistance < distance) {
+                        distanceIsFromLineChart = true;
+                    } else {
+                        break;
+                    }
+                } else {
+                    /*
+                     Here are all other chart cases.
+                     Current implementation is specific to the Bar Chart, without any thought to the others.
+                     Thus, we consider the tap location must be "inside" the bar to be valid.
+                     Moreover, the current closest distance must not be a line Chart : a line chart has a higher priority.
+                     If you need to handle other cases in a different way, be free to update the code.
+                     */
+
+                    // 2a. Select the closest 'high'lighter
+                    // However, a 'Line Chart Data' has a higher priority than any other chart data type
+                    if (cDistance >= distance) {
+                        break;
+                    }
+
+                    // 2b. Get the bar bottom position
+                    double barChartBottom = (double) (mChart.getYChartMin() + mChart.getHeight());
+
+                    if (highlighterChartData instanceof BarData && mChart != null) {
+
+                        if (!highlighterChartData.getDataSets().isEmpty()) {
+                            BarDataSet dataSet = (BarDataSet) highlighterChartData.getDataSets().get(0);
+                            float bottomValue = ((BarEntry) dataSet.getEntryForXValue(high.getX(), -1)).getYVals()[0];
+                            MPPointD px = mChart.getTransformer(dataSet.getAxisDependency()).getPixelForValues(high.getX(), bottomValue);
+                            barChartBottom = px.y;
+                        }
+                    }
+
+
+                    // 2c. Check whether the tap location is inside the bar, and if the current nearest distance is not from a line chart point
+                    if (!(x >= high.getXPx() - stepWidth
+                            && x <= high.getXPx() + stepWidth
+                            && y < barChartBottom
+                            && !distanceIsFromLineChart)) {
+                        break;
+                    }
+                }
+
+
+                // 4. This 'high'lighter becomes the closest one to the finger tap
+                closest = high;
+                distance = cDistance;
+
+
             }
         }
 
