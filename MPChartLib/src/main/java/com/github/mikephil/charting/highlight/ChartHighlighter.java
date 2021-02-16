@@ -256,10 +256,10 @@ public class ChartHighlighter<T extends BarLineScatterCandleBubbleDataProvider> 
                     // 2a. test whether it's the first distance to take into account, or if the finger tap location is not too far from the chart line
                     // 2b. We replace the previous closest chart line distance only the previous one is from another chart type,
                     //     or if it's a smaller value
-                    if (cDistance <= minimum_radius_size && cDistance < distance) {
+                    if (cDistance <= minimum_radius_size && (!distanceIsFromLineChart || cDistance < distance)) {
                         distanceIsFromLineChart = true;
                     } else {
-                        break;
+                        continue;
                     }
                 } else {
                     /*
@@ -273,7 +273,7 @@ public class ChartHighlighter<T extends BarLineScatterCandleBubbleDataProvider> 
                     // 2a. Select the closest 'high'lighter
                     // However, a 'Line Chart Data' has a higher priority than any other chart data type
                     if (cDistance >= distance) {
-                        break;
+                        continue;
                     }
 
                     // 2b. Get the bar bottom position
@@ -295,7 +295,7 @@ public class ChartHighlighter<T extends BarLineScatterCandleBubbleDataProvider> 
                             && x <= high.getXPx() + stepWidth
                             && y < barChartBottom
                             && !distanceIsFromLineChart)) {
-                        break;
+                        continue;
                     }
                 }
 
