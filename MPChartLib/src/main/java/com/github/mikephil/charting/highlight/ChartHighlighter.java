@@ -18,6 +18,8 @@ import com.github.mikephil.charting.utils.MPPointD;
 import java.util.ArrayList;
 import java.util.List;
 
+import static java.lang.Float.NaN;
+
 /**
  * Created by Philipp Jahoda on 21/07/15.
  */
@@ -182,7 +184,7 @@ public class ChartHighlighter<T extends BarLineScatterCandleBubbleDataProvider> 
         List<Entry> entries = set.getEntriesForXValue(xVal);
         if (entries.size() == 0) {
             // Try to find closest x-value and take all entries for that x-value
-            final Entry closest = set.getEntryForXValue(xVal, Float.NaN, rounding);
+            final Entry closest = set.getEntryForXValue(xVal, NaN, rounding);
             if (closest != null)
             {
                 //noinspection unchecked
@@ -283,7 +285,14 @@ public class ChartHighlighter<T extends BarLineScatterCandleBubbleDataProvider> 
 
                         if (!highlighterChartData.getDataSets().isEmpty()) {
                             BarDataSet dataSet = (BarDataSet) highlighterChartData.getDataSets().get(0);
-                            float bottomValue = ((BarEntry) dataSet.getEntryForXValue(high.getX(), -1)).getYVals()[0];
+                            BarEntry entry = ((BarEntry) dataSet.getEntryForXValue(high.getX(), NaN));
+                            float[] yVals = entry.getYVals();
+                            float bottomValue;
+                            if (yVals != null) {
+                                bottomValue = entry.getYVals()[0];
+                            } else {
+                                bottomValue = entry.getY();
+                            }
                             MPPointD px = mChart.getTransformer(dataSet.getAxisDependency()).getPixelForValues(high.getX(), bottomValue);
                             barChartBottom = px.y;
                         }
